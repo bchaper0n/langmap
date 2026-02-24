@@ -16,7 +16,7 @@ update = False
 
 data_path = "data"
 flags_path = "flags"
-country_data_filenames = ["country-by-name.json", "country-by-capital-city.json", "country-by-abbreviation.json", "country-by-continent.json", "country-by-geo-coordinates.json", "country-by-flag.json"]
+country_data_filenames = ["country-by-name.json", "country-by-capital-city.json", "country-by-abbreviation.json", "country-by-continent.json", "country-by-geo-coordinates.json", "country-by-flag.json", "country-by-languages.json"]
 
 countries = []
 capitals = [] #245
@@ -32,6 +32,7 @@ def main():
     global continents
     global coords
     global flags
+    global languages
 
     if update:
         get_country_data()
@@ -65,6 +66,11 @@ def main():
     # get flags
     with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
         flags = json.load(f)
+    fnum += 1
+
+    # get languages
+    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
+        languages = json.load(f)
             
     # rename 'country' key to 'name'
     for i in range(len(countries)):
@@ -113,6 +119,17 @@ def main():
             print(f"flags country mismatch at index {i}: {countries[i]["name"]} and {flags[i]["country"]}")
             break
 
+    # add languages
+    for i in range(len(countries)):
+        for j in range(len(languages)):
+            if countries[i]["name"] == languages[j]["country"]:
+                countries[i].update({"languages": languages[j]["languages"]})
+                break
+        
+        if "languages" not in countries[i]:
+            print(f"languages from {countries[i]["name"]} missing + {j}")
+            break
+
     # copy json to api
     api_data_path = "../db/load-sh/data"
     if not Path(api_data_path).is_dir():
@@ -129,6 +146,7 @@ def clean_country_data():
     global abbrvs
     global continents
     global flags
+    global languages
 
     # Ivory Coast wrong place
     ivory_coast = countries.pop(52)
@@ -238,6 +256,68 @@ def clean_country_data():
     with open(os.path.join(flags_path, "south_georgia.txt"), encoding='utf-8') as f:
         base64_str = f.read()
         flags[203]["flag_base64"] = base64_str
+
+    # languages
+    antarc_lang = {"country": "Antarctica", "languages": None}
+    languages.append(antarc_lang)
+
+    bouv_lang = {"country": "Bouvet Island", "languages": ["Norwegian"]}
+    languages.append(bouv_lang)
+    
+    brit_ind_lang = {"country": "British Indian Ocean Territory", "languages": ["English"]}
+    languages.append(brit_ind_lang)
+
+    england_lang = {"country": "England", "languages": ["English"]}
+    languages.append(england_lang)
+
+    fr_s_lang = {"country": "French Southern territories", "languages": ["French"]}
+    languages.append(fr_s_lang)
+
+    guernsey_lang = {"country": "Guernsey", "languages": ["English", "Sercquiais", "Auregnais"]}
+    languages.append(guernsey_lang)
+
+    heard_isl_lang = {"country": "Heard Island and McDonald Islands", "languages": ["English"]}
+    languages.append(heard_isl_lang)
+
+    isl_man_lang = {"country": "Isle of Man", "languages": ["English", "Manx"]}
+    languages.append(isl_man_lang)
+
+    jersey_lang = {"country": "Jersey", "languages": ["English", "Jèrriais", "Jersey Legal French"]}
+    languages.append(jersey_lang)
+
+    n_mac_lang = {"country": "North Macedonia", "languages": ["Macedonian", "Albanian", "Turkish", "Romani", "Serbian", "Bosnian", "Aromanian"]}
+    languages.append(n_mac_lang)
+
+    mont_neg_lang = {"country": "Montenegro", "languages": ["Montenegrin", "Albanian", "Bosnian", "Croatian", "Serbian"]}
+    languages.append(mont_neg_lang)
+
+    n_ireland_lang = {"country": "Northern Ireland", "languages": ["English", "Irish", "Ulster Scots"]}
+    languages.append(n_ireland_lang)
+
+    scotland_lang = {"country": "Scotland", "languages": ["English", "Scots", "Scottish Gaelic"]}
+    languages.append(scotland_lang)
+
+    sou_geo_lang = {"country": "South Georgia and the South Sandwich Islands", "languages": ["English"]}
+    languages.append(sou_geo_lang)
+
+    sou_sudan_lang = {"country": "South Sudan", "languages": ["English"]}
+    languages.append(sou_sudan_lang)
+
+    sou_sudan_lang = {"country": "South Sudan", "languages": ["English", "Dinka", "Juba Arabic", "Nuer", "Bari", "Murle", "Luo", "Ma'di", "Otuho", "Zande", "Murle", "Shilluk"]}
+    languages.append(sou_sudan_lang)
+
+    languages[248]["country"] = "The Democratic Republic of the Congo"
+    
+    timor_lang = {"country": "Timor-Leste", "languages": ["Portuguese", "Tetum", "Atauru", "Baikeno", "Bekais", "Bunak", "Fataluku", "Galoli", "Habun", "Idalaka", "Kawaimina", "Kemak", "Makalero", "Makasae", "Makuva", "Mambai", "Tokodede", "English", "Indonesian" ]}
+    languages.append(timor_lang)
+
+    vatican_lang = {"country": "Vatican City", "languages": ["Latin", "Italian"]}
+    languages.append(vatican_lang)
+
+    wales_lang = {"country": "Wales", "languages": ["English", "Welsh"]}
+    languages.append(wales_lang)
+
+        
 
 
 # get country data from repo and delete unneeded files
