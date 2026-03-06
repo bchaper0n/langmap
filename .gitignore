@@ -2,6 +2,7 @@
 *.env
 *.log
 .dockerignore
+__pycache__
 
 # dependencies
 node_modules

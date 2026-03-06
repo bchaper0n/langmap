@@ -6,331 +6,88 @@ import json
 import os
 from pathlib import Path
 import shutil
-from sys import platform
-from subprocess import check_output
 import stat
-import base64
+import fix_countries_data as fix
 
-repo_download_path = "country-json"
 update = False
-
+repo_url = "https://github.com/samayo/country-json/"
+repo_download_path = "country-json"
+countries_filename = "countries.json"
 data_path = "data"
-flags_path = "flags"
-country_data_filenames = ["country-by-name.json", "country-by-capital-city.json", "country-by-abbreviation.json", "country-by-continent.json", "country-by-geo-coordinates.json", "country-by-flag.json", "country-by-languages.json"]
+api_data_path = "../db/load-sh/data"
 
-countries = []
-capitals = [] #245
-abbrvs = [] #245
-continents = [] #244
-coords = [] #244
-flags = [] #245
+country_property_info = [
+    {   "name": "country",
+        "input_name": "country",
+        "path": "country-by-name.json"},
+    {   "name": "capital",
+        "input_name": "city",
+        "path": "country-by-capital-city.json"},
+    {   "name": "abbreviation",
+        "input_name": "abbreviation",
+        "path": "country-by-abbreviation.json"},
+    {   "name": "continent",
+        "input_name": "continent",
+        "path": "country-by-continent.json"},
+    {   "name": "flag",
+        "input_name": "flag_base64",
+        "path": "country-by-flag.json"},
+    {   "name": "languages",
+        "input_name": "languages",
+        "path": "country-by-languages.json"}
+]
+#"coordinates": "country-by-geo-coordinates.json",
+
+country_data_funcs = [fix.fix_countries_data, fix.fix_capitals_data, fix.fix_abbrvs_data, fix.fix_continents_data, fix.fix_flags_data, fix.fix_languages_data]
 
 def main():
-    global countries
-    global capitals
-    global abbrvs
-    global continents
-    global coords
-    global flags
-    global languages
 
     if update:
         get_country_data()
 
-    fnum = 0
-
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        countries = json.load(f)
-    fnum += 1
-
-    # get country and capital
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        capitals = json.load(f)
-    fnum += 1
-
-    # get abbreviations
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        abbrvs = json.load(f)
-    fnum += 1
-
-    # get continents
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        continents = json.load(f)
-    fnum += 1
-
-    # get geographical coordinates
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        coords = json.load(f)
-    fnum += 1
-
-    # get flags
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        flags = json.load(f)
-    fnum += 1
-
-    # get languages
-    with open(os.path.join(data_path, country_data_filenames[fnum]), encoding='utf-8') as f:
-        languages = json.load(f)
+    countries_json = []
+    temp_info_json = []
+    for i in range(len(country_property_info)):
+        property = country_property_info[i]
+        with open(os.path.join(data_path, property["path"]), encoding='utf-8') as f:
+            if i == 0: # load country data first
+                countries_json = json.load(f)
+                countries_json = country_data_funcs[i](countries_json) # fix data for countries
+            else:
+                temp_info_json = json.load(f)
+                temp_info_json = country_data_funcs[i](temp_info_json) # fix data for current property
             
-    # rename 'country' key to 'name'
-    for i in range(len(countries)):
-        countries[i].update({"name": countries[i]["country"]})
-        countries[i].pop("country", None)
+                # add data for country property
+                for j in range(len(countries_json)):
+                    for k in range(len(temp_info_json)):
+                        if countries_json[j]["country"] == temp_info_json[k]["country"]:
+                            countries_json[j].update({property["name"]: temp_info_json[k][property["input_name"]]})
+                            temp_info_json.pop(k)
+                            break
+                    
+                    if property["name"] not in countries_json[j]:
+                        print(f"\t{property["name"]} from {countries_json[j]["country"]} missing")
+                        break
 
-    clean_country_data()
-
-    # add capitals
-    for i in range(len(countries)):
-        if countries[i]["name"] == capitals[i]["country"]: # double check if countries match
-            #print(countries[i])
-            countries[i].update({"capital": capitals[i]["city"]})
-            #print(countries[i]) 
-        else:
-            print(f"capital country mismatch at index {i}: {countries[i]["name"]} and {capitals[i]["country"]}")
-            break
-
-    # add abbrvs
-    for i in range(len(countries)):
-        if countries[i]["name"] == abbrvs[i]["country"]: # double check if countries match
-            #print(countries[i])
-            countries[i].update({"abbreviation": abbrvs[i]["abbreviation"]})
-            #print(countries[i]) 
-        else:
-            print(f"abbrv country mismatch at index {i}: {countries[i]["name"]} and {abbrvs[i]["country"]}")
-            break
-    
-    # add continents
-    for i in range(len(countries)):
-        if countries[i]["name"] == continents[i]["country"]: # double check if countries match
-            #print(countries[i])
-            countries[i].update({"continent": continents[i]["continent"]})
-            #print(countries[i]) 
-        else:
-            print(f"continent country mismatch at index {i}: {countries[i]["name"]} and {continents[i]["country"]}")
-            break
-
-    # add flags
-    for i in range(len(countries)):
-        if countries[i]["name"] == flags[i]["country"]: # double check if countries match
-            #print(countries[i])
-            countries[i].update({"flag": flags[i]["flag_base64"].split(",")[1] if not flags[i]["flag_base64"] is None else flags[i]["flag_base64"]})
-            #print(countries[i]) 
-        else:
-            print(f"flags country mismatch at index {i}: {countries[i]["name"]} and {flags[i]["country"]}")
-            break
-
-    # add languages
-    for i in range(len(countries)):
-        for j in range(len(languages)):
-            if countries[i]["name"] == languages[j]["country"]:
-                countries[i].update({"languages": languages[j]["languages"]})
-                break
-        
-        if "languages" not in countries[i]:
-            print(f"languages from {countries[i]["name"]} missing + {j}")
-            break
-
-    # copy json to api
-    api_data_path = "../db/load-sh/data"
+    # copy json to api directory
     if not Path(api_data_path).is_dir():
         os.mkdir(api_data_path)
 
-    countries_filename = "countries.json"
     with open(f"{api_data_path}/{countries_filename}", 'w', encoding='utf-8') as f:
-        json.dump(countries, f, ensure_ascii=False, indent=4)
-
-
-def clean_country_data():
-    global countries
-    global capitals
-    global abbrvs
-    global continents
-    global flags
-    global languages
-
-    # Ivory Coast wrong place
-    ivory_coast = countries.pop(52)
-    countries.insert(109, ivory_coast)
-
-    # England wrong place
-    england = countries.pop(63)
-    countries.insert(64, england)
-
-    # DRC wrong place and add 2nd "the"
-    drc = countries.pop(49)
-    drc["name"] = "The Democratic Republic of the Congo"
-    countries.insert(218, drc)
-    capitals[215]["country"] = "The Democratic Republic of the Congo"
-    abbrvs[216]["country"] = "The Democratic Republic of the Congo"
-    continents[215]["country"] = "The Democratic Republic of the Congo"
-    flags[216]["country"] = "The Democratic Republic of the Congo"
-
-
-    # missing Guernsey capital and continent
-    guernsey = {"country": "Guernsey", "city": "Saint Peter Port"}
-    capitals.insert(89, guernsey)
-    guernsey2 = {"country": "Guernsey", "continent": "Europe"}
-    continents.insert(89, guernsey2)
-
-    # missing Isle of Man capital and continent
-    iom = {"country": "Isle of Man", "city": "Douglas"}
-    capitals.insert(106, iom)
-    iom_2 = {"country": "Isle of Man", "continent": "Europe"}
-    continents.insert(106, iom_2)
-
-    # missing Jersey capital, continent, flag
-    jersey = {"country": "Jersey", "city": "St Helier"}
-    capitals.insert(111, jersey)
-    jersey_2 = {"country": "Jersey", "continent": "Europe"}
-    continents.insert(111, jersey_2)
-    with open(os.path.join(flags_path, "jersey.txt"), encoding='utf-8') as f:
-        base64_str = f.read()
-        jersey_3 = {"country": "Jersey", "flag_base64": base64_str}
-        flags.insert(111, jersey_3)
-
-    # missing Montenegro flag
-    with open(os.path.join(flags_path, "montenegro.txt"), encoding='utf-8') as f:
-        base64_str = f.read()
-        montenegro = {"country": "Montenegro", "flag_base64": base64_str}
-        flags.insert(145, montenegro)
-
-    # Montserrat wrong place
-    montserrat = countries.pop(145)
-    countries.insert(146, montserrat)
-
-    # missing Timor-Leste capital, continent, flag
-    t_l = {"country": "Timor-Leste", "city": "Dili"}
-    capitals.insert(219, t_l)
-    t_l_2 = {"country": "Timor-Leste", "continent": "Asia"}
-    continents.insert(219, t_l_2)
-    with open(os.path.join(flags_path, "timor-leste.txt"), encoding='utf-8') as f:
-        base64_str = f.read()
-        montenegro = {"country": "Timor-Leste", "flag_base64": base64_str}
-        flags.insert(219, montenegro)
-
-    #remove Holy See + readdas Vatican City
-    vc = countries.pop(95)
-    vc_cap = capitals.pop(95)
-    vc_abbr = abbrvs.pop(94)
-    vc_cont = continents.pop(95)
-    vc_flag = flags.pop(95)
-    
-    #add and rename Vatican City
-    vc["name"] = "Vatican City"
-    countries.insert(237, vc)
-    capitals.pop(238)
-
-    vc_cap["country"] = "Vatican City"
-    capitals.insert(237, vc_cap)
-
-    vc_abbr["country"] = "Vatican City"
-    abbrvs.insert(235, vc_abbr)
-
-    vc_cont["country"] = "Vatican City"
-    continents.insert(237, vc_cont)
-    
-    vc_flag["country"] = "Vatican City"
-    flags.insert(237, vc_flag)
-
-    # Israel wrong order
-    is_1 = countries.pop(104)
-    countries.insert(105, is_1)
-    is_2 = capitals.pop(104)
-    capitals.insert(105, is_2)
-    is_3 = continents.pop(104)
-    continents.insert(105, is_3)
-
-    # missing England, Scotland, and Wales abbrv
-    en = {"country": "England", "abbreviation": "GB"}
-    abbrvs.insert(63, en)
-    sc = {"country": "Scotland", "abbreviation": "GB"}
-    abbrvs.insert(192, sc)
-    w = {"country": "Wales", "abbreviation": "GB"}
-    abbrvs.insert(242, w)
-
-    # missing British Indian Ocean Territory capital
-    capitals[30]["city"] = "Diego Garcia"
-
-    # missing South Georgia and the South Sandwich Islands capital and flag
-    capitals[203]["city"] = "King Edward Point"
-    with open(os.path.join(flags_path, "south_georgia.txt"), encoding='utf-8') as f:
-        base64_str = f.read()
-        flags[203]["flag_base64"] = base64_str
-
-    # languages
-    antarc_lang = {"country": "Antarctica", "languages": None}
-    languages.append(antarc_lang)
-
-    bouv_lang = {"country": "Bouvet Island", "languages": ["Norwegian"]}
-    languages.append(bouv_lang)
-    
-    brit_ind_lang = {"country": "British Indian Ocean Territory", "languages": ["English"]}
-    languages.append(brit_ind_lang)
-
-    england_lang = {"country": "England", "languages": ["English"]}
-    languages.append(england_lang)
-
-    fr_s_lang = {"country": "French Southern territories", "languages": ["French"]}
-    languages.append(fr_s_lang)
-
-    guernsey_lang = {"country": "Guernsey", "languages": ["English", "Sercquiais", "Auregnais"]}
-    languages.append(guernsey_lang)
-
-    heard_isl_lang = {"country": "Heard Island and McDonald Islands", "languages": ["English"]}
-    languages.append(heard_isl_lang)
-
-    isl_man_lang = {"country": "Isle of Man", "languages": ["English", "Manx"]}
-    languages.append(isl_man_lang)
-
-    jersey_lang = {"country": "Jersey", "languages": ["English", "Jèrriais", "Jersey Legal French"]}
-    languages.append(jersey_lang)
-
-    n_mac_lang = {"country": "North Macedonia", "languages": ["Macedonian", "Albanian", "Turkish", "Romani", "Serbian", "Bosnian", "Aromanian"]}
-    languages.append(n_mac_lang)
-
-    mont_neg_lang = {"country": "Montenegro", "languages": ["Montenegrin", "Albanian", "Bosnian", "Croatian", "Serbian"]}
-    languages.append(mont_neg_lang)
-
-    n_ireland_lang = {"country": "Northern Ireland", "languages": ["English", "Irish", "Ulster Scots"]}
-    languages.append(n_ireland_lang)
-
-    scotland_lang = {"country": "Scotland", "languages": ["English", "Scots", "Scottish Gaelic"]}
-    languages.append(scotland_lang)
-
-    sou_geo_lang = {"country": "South Georgia and the South Sandwich Islands", "languages": ["English"]}
-    languages.append(sou_geo_lang)
-
-    sou_sudan_lang = {"country": "South Sudan", "languages": ["English"]}
-    languages.append(sou_sudan_lang)
-
-    sou_sudan_lang = {"country": "South Sudan", "languages": ["English", "Dinka", "Juba Arabic", "Nuer", "Bari", "Murle", "Luo", "Ma'di", "Otuho", "Zande", "Murle", "Shilluk"]}
-    languages.append(sou_sudan_lang)
-
-    languages[248]["country"] = "The Democratic Republic of the Congo"
-    
-    timor_lang = {"country": "Timor-Leste", "languages": ["Portuguese", "Tetum", "Atauru", "Baikeno", "Bekais", "Bunak", "Fataluku", "Galoli", "Habun", "Idalaka", "Kawaimina", "Kemak", "Makalero", "Makasae", "Makuva", "Mambai", "Tokodede", "English", "Indonesian" ]}
-    languages.append(timor_lang)
-
-    vatican_lang = {"country": "Vatican City", "languages": ["Latin", "Italian"]}
-    languages.append(vatican_lang)
-
-    wales_lang = {"country": "Wales", "languages": ["English", "Welsh"]}
-    languages.append(wales_lang)
-
+        json.dump(countries_json, f, ensure_ascii=False, indent=4)
         
-
 
 # get country data from repo and delete unneeded files
 def get_country_data():
 
     if not Path(f"./{repo_download_path}").is_dir():
-        Repo.clone_from("https://github.com/samayo/country-json/", f"./{repo_download_path}")
+        Repo.clone_from(repo_url, f"./{repo_download_path}")
 
     #keep req files
     if not Path(data_path).is_dir():
         os.mkdir(data_path)
 
-    for filename in country_data_filenames:
+    for filename in country_property_info:
         shutil.copyfile(f"./{repo_download_path}/src/{filename}", f"./{data_path}/{filename}")
 
     # delete repo
