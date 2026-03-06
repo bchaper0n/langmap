@@ -19,26 +19,30 @@ api_data_path = "../db/load-sh/data"
 country_property_info = [
     {   "name": "country",
         "input_name": "country",
-        "path": "country-by-name.json"},
+        "path": "country-by-name.json",
+        "func": fix.fix_countries_data},
     {   "name": "capital",
         "input_name": "city",
-        "path": "country-by-capital-city.json"},
+        "path": "country-by-capital-city.json",
+        "func": fix.fix_capitals_data},
     {   "name": "abbreviation",
         "input_name": "abbreviation",
-        "path": "country-by-abbreviation.json"},
+        "path": "country-by-abbreviation.json",
+        "func": fix.fix_abbrvs_data},
     {   "name": "continent",
         "input_name": "continent",
-        "path": "country-by-continent.json"},
+        "path": "country-by-continent.json",
+        "func": fix.fix_continents_data},
     {   "name": "flag",
         "input_name": "flag_base64",
-        "path": "country-by-flag.json"},
+        "path": "country-by-flag.json",
+        "func": fix.fix_flags_data},
     {   "name": "languages",
         "input_name": "languages",
-        "path": "country-by-languages.json"}
+        "path": "country-by-languages.json",
+        "func": fix.fix_languages_data}
 ]
 #"coordinates": "country-by-geo-coordinates.json",
-
-country_data_funcs = [fix.fix_countries_data, fix.fix_capitals_data, fix.fix_abbrvs_data, fix.fix_continents_data, fix.fix_flags_data, fix.fix_languages_data]
 
 def main():
 
@@ -47,32 +51,34 @@ def main():
 
     countries_json = []
     temp_info_json = []
+    # for each country property, fetch json and save to combined json
     for i in range(len(country_property_info)):
         property = country_property_info[i]
         with open(os.path.join(data_path, property["path"]), encoding='utf-8') as f:
             if i == 0: # load country data first
                 countries_json = json.load(f)
-                countries_json = country_data_funcs[i](countries_json) # fix data for countries
-            else:
+                countries_json = property["func"](countries_json) # fix data for countries
+            else: # add data for country property
                 temp_info_json = json.load(f)
-                temp_info_json = country_data_funcs[i](temp_info_json) # fix data for current property
+                temp_info_json = property["func"](temp_info_json) # fix data for current property
             
-                # add data for country property
+                # search for each country's property
                 for j in range(len(countries_json)):
                     for k in range(len(temp_info_json)):
-                        if countries_json[j]["country"] == temp_info_json[k]["country"]:
-                            countries_json[j].update({property["name"]: temp_info_json[k][property["input_name"]]})
-                            temp_info_json.pop(k)
+                        if countries_json[j]["country"] == temp_info_json[k]["country"]: # if prop for country found
+                            countries_json[j].update({property["name"]: temp_info_json[k][property["input_name"]]}) # save to json
+                            temp_info_json.pop(k) # delete from temp
                             break
                     
-                    if property["name"] not in countries_json[j]:
+                    if property["name"] not in countries_json[j]: # if prop not found for current country, fail
                         print(f"\t{property["name"]} from {countries_json[j]["country"]} missing")
                         break
 
-    # copy json to api directory
+    # check if api has directory for json
     if not Path(api_data_path).is_dir():
         os.mkdir(api_data_path)
 
+    # save json to api directory
     with open(f"{api_data_path}/{countries_filename}", 'w', encoding='utf-8') as f:
         json.dump(countries_json, f, ensure_ascii=False, indent=4)
         
@@ -80,6 +86,7 @@ def main():
 # get country data from repo and delete unneeded files
 def get_country_data():
 
+    # if directory exists, clone github repo
     if not Path(f"./{repo_download_path}").is_dir():
         Repo.clone_from(repo_url, f"./{repo_download_path}")
 
@@ -87,10 +94,11 @@ def get_country_data():
     if not Path(data_path).is_dir():
         os.mkdir(data_path)
 
+    # save desired country properties
     for filename in country_property_info:
         shutil.copyfile(f"./{repo_download_path}/src/{filename}", f"./{data_path}/{filename}")
 
-    # delete repo
+    # delete everything else from cloned repo
     if Path(f"./{repo_download_path}").is_dir():
         for root, dirs, files in os.walk(repo_download_path):  
             for dir in dirs:
